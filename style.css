@@ -63,7 +63,7 @@ body {
   padding: 4px;
 }
 
-.logo-fallback {
+.eos-badge {
   height: 56px;
   width: 56px;
   display: flex;
@@ -76,6 +76,17 @@ body {
   letter-spacing: 1px;
   border-radius: 8px;
   flex-shrink: 0;
+}
+
+.lang-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  background: var(--eos-black);
+  color: var(--eos-white);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .app-title {
