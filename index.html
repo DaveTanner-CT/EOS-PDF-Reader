@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Read-Aloud Highlighter</title>
+  <meta name="description" content="Read PDFs aloud with synchronized sentence highlighting. All processing happens on your device." />
+  <link rel="stylesheet" href="style.css" />
+  <!-- PDF.js (rendering + text extraction). This is the only external dependency. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+  <!-- ============ Header ============ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <!-- Replace logo.png with your school's logo file (see README). -->
+        <img id="schoolLogo" class="school-logo" src="logo.png" alt="E.O. Smith High School logo" />
+        <div id="logoFallback" class="logo-fallback" aria-hidden="true" hidden>EOS</div>
+        <div class="brand-text">
+          <h1 class="app-title">PDF Read-Aloud Highlighter</h1>
+          <p class="app-subtitle">Listen to any text-based PDF with follow-along highlighting</p>
+        </div>
+      </div>
+      <p class="privacy-note" role="note">
+        <svg class="lock-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 5a3 3 0 1 1 6 0v3H9V7z"/>
+        </svg>
+        Your PDF stays on your device. Nothing is uploaded.
+      </p>
+    </div>
+  </header>
+
+  <main class="main-area">
+
+    <!-- Browser compatibility warning (shown only if speech synthesis is unavailable) -->
+    <div id="speechWarning" class="alert alert-warning" role="alert" hidden>
+      <strong>Speech is not available in this browser.</strong>
+      You can still view PDFs, but read-aloud requires a browser with speech support,
+      such as Chrome, Edge, or Safari. On Chromebooks, the built-in Chrome browser works well.
+    </div>
+
+    <!-- ============ Upload card ============ -->
+    <section id="uploadCard" class="card upload-card" aria-labelledby="uploadHeading">
+      <h2 id="uploadHeading">Choose a PDF to read aloud</h2>
+      <p class="upload-hint">Works best with text-based PDFs (not scanned images).</p>
+
+      <div id="dropZone" class="drop-zone" tabindex="0" role="button"
+           aria-label="Choose a PDF file or drag and drop one here">
+        <svg class="upload-icon" viewBox="0 0 24 24" width="44" height="44" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M19 13v6H5v-6H3v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6h-2zM11 6.83 8.41 9.41 7 8l5-5 5 5-1.41 1.41L13 6.83V16h-2V6.83z"/>
+        </svg>
+        <span class="drop-zone-label">Tap to choose a PDF</span>
+        <span class="drop-zone-sub">or drag and drop a file here</span>
+      </div>
+      <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden />
+    </section>
+
+    <!-- Status / loading messages -->
+    <div id="statusBar" class="status-bar" role="status" aria-live="polite" hidden></div>
+
+    <!-- Error messages (e.g., image-only PDFs) -->
+    <div id="errorBar" class="alert alert-error" role="alert" hidden></div>
+
+    <!-- ============ Reader ============ -->
+    <section id="readerSection" class="reader-section" hidden>
+
+      <!-- Document info + page navigation -->
+      <div class="card doc-bar">
+        <div class="doc-info">
+          <span id="docName" class="doc-name"></span>
+          <button id="newFileBtn" class="btn btn-ghost" type="button">Open a different PDF</button>
+        </div>
+        <nav class="page-nav" aria-label="Page navigation">
+          <button id="prevPageBtn" class="btn btn-secondary" type="button" aria-label="Previous page">&#8249; Page</button>
+          <label class="page-indicator" for="pageInput">
+            <input id="pageInput" type="number" min="1" value="1" inputmode="numeric" aria-label="Current page number" />
+            <span id="pageCount">/ 1</span>
+          </label>
+          <button id="nextPageBtn" class="btn btn-secondary" type="button" aria-label="Next page">Page &#8250;</button>
+        </nav>
+      </div>
+
+      <!-- PDF pages render here -->
+      <div id="viewer" class="viewer" aria-label="PDF document"></div>
+    </section>
+  </main>
+
+  <!-- ============ Sticky reading controls ============ -->
+  <div id="controlBar" class="control-bar" hidden>
+    <div class="control-bar-inner">
+
+      <!-- Transport buttons -->
+      <div class="transport" role="group" aria-label="Reading controls">
+        <button id="prevBtn" class="btn btn-round" type="button" aria-label="Previous sentence" title="Previous sentence (Left arrow)">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 6h2v12H6V6zm12 0v12l-9-6 9-6z"/></svg>
+        </button>
+        <button id="playPauseBtn" class="btn btn-round btn-primary-round" type="button" aria-label="Play" title="Play / Pause (Spacebar)">
+          <svg id="playIcon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 5v14l11-7L8 5z"/></svg>
+          <svg id="pauseIcon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false" hidden><path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/></svg>
+        </button>
+        <button id="stopBtn" class="btn btn-round" type="button" aria-label="Stop reading" title="Stop">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 6h12v12H6V6z"/></svg>
+        </button>
+        <button id="nextBtn" class="btn btn-round" type="button" aria-label="Next sentence" title="Next sentence (Right arrow)">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path fill="currentColor" d="M16 6h2v12h-2V6zM6 6l9 6-9 6V6z"/></svg>
+        </button>
+      </div>
+
+      <!-- Now reading preview -->
+      <p id="nowReading" class="now-reading" aria-live="off"></p>
+
+      <!-- Speed + voice -->
+      <div class="settings">
+        <label class="setting">
+          <span class="setting-label">Speed <span id="rateValue">1.0&times;</span></span>
+          <input id="rateSlider" type="range" min="0.5" max="2" step="0.1" value="1" aria-label="Reading speed" />
+        </label>
+        <label class="setting">
+          <span class="setting-label">Voice</span>
+          <select id="voiceSelect" aria-label="Voice selection"></select>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Footer ============ -->
+  <footer class="site-footer">
+    <p>Created for E.O. Smith High School.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

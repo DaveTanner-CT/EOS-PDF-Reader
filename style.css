@@ -1,0 +1,468 @@
+/* ============================================================
+   PDF Read-Aloud Highlighter — E.O. Smith High School
+   Brand palette: red #C8102E, black #000000, white #FFFFFF,
+   light background #F7F7F7
+   ============================================================ */
+
+:root {
+  --eos-red: #C8102E;
+  --eos-red-dark: #9C0C24;
+  --eos-black: #000000;
+  --eos-white: #FFFFFF;
+  --eos-bg: #F7F7F7;
+  --eos-ink: #1A1A1A;
+  --eos-gray: #5C5C5C;
+  --eos-line: #E2E2E2;
+  --highlight: rgba(200, 16, 46, 0.28);   /* translucent brand red over PDF text */
+  --radius: 14px;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  --control-bar-height: 150px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  background: var(--eos-bg);
+  color: var(--eos-ink);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+/* ---------- Header ---------- */
+
+.site-header {
+  background: var(--eos-black);
+  color: var(--eos-white);
+  border-bottom: 5px solid var(--eos-red);
+}
+
+.header-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px 16px 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.school-logo {
+  height: 56px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  background: var(--eos-white);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.logo-fallback {
+  height: 56px;
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--eos-red);
+  color: var(--eos-white);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 1px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.app-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  color: #D9D9D9;
+}
+
+.privacy-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--eos-white);
+}
+
+.lock-icon { color: var(--eos-red); filter: brightness(1.6); }
+
+/* ---------- Layout ---------- */
+
+.main-area {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 16px calc(var(--control-bar-height) + 40px);
+}
+
+.card {
+  background: var(--eos-white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+
+/* ---------- Upload card ---------- */
+
+.upload-card { text-align: center; }
+
+.upload-card h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+}
+
+.upload-hint {
+  margin: 0 0 18px;
+  color: var(--eos-gray);
+  font-size: 0.95rem;
+}
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 36px 20px;
+  border: 2.5px dashed var(--eos-red);
+  border-radius: var(--radius);
+  background: #FFF7F8;
+  color: var(--eos-red);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.drop-zone:hover, .drop-zone:focus-visible { background: #FFEDEF; }
+.drop-zone.dragover { background: #FFE2E6; transform: scale(1.01); }
+
+.drop-zone-label { font-size: 1.15rem; font-weight: 700; color: var(--eos-ink); }
+.drop-zone-sub { font-size: 0.9rem; color: var(--eos-gray); }
+
+/* ---------- Status & alerts ---------- */
+
+.status-bar {
+  margin-top: 16px;
+  padding: 12px 18px;
+  background: var(--eos-black);
+  color: var(--eos-white);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.alert {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+}
+
+.alert-error {
+  background: #FDECEE;
+  border: 1.5px solid var(--eos-red);
+  color: var(--eos-red-dark);
+  font-weight: 600;
+}
+
+.alert-warning {
+  background: #FFF8E1;
+  border: 1.5px solid #C99700;
+  color: #6B5200;
+}
+
+/* ---------- Document bar ---------- */
+
+.reader-section { margin-top: 16px; }
+
+.doc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+}
+
+.doc-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.doc-name {
+  font-weight: 700;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--eos-gray);
+}
+
+.page-indicator input {
+  width: 58px;
+  padding: 8px 6px;
+  font-size: 1rem;
+  text-align: center;
+  border: 1.5px solid var(--eos-line);
+  border-radius: 8px;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 10px;
+  min-height: 44px;          /* touch-friendly target */
+  padding: 10px 16px;
+  font-weight: 700;
+}
+
+.btn:focus-visible {
+  outline: 3px solid var(--eos-red);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  background: var(--eos-white);
+  border: 2px solid var(--eos-black);
+  color: var(--eos-black);
+}
+.btn-secondary:hover { background: var(--eos-black); color: var(--eos-white); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--eos-red);
+  text-decoration: underline;
+  font-weight: 600;
+  padding: 8px 4px;
+}
+
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---------- PDF viewer ---------- */
+
+.viewer { display: flex; flex-direction: column; gap: 18px; }
+
+.pdf-page {
+  position: relative;
+  margin: 0 auto;
+  background: var(--eos-white);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.pdf-page canvas { display: block; }
+
+.page-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--eos-gray);
+  font-size: 0.9rem;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+
+/* Text layer: invisible text positioned over the canvas so
+   highlights line up with the rendered PDF. */
+.text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+}
+
+.text-layer span {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  transform-origin: 0 0;
+  border-radius: 3px;
+}
+
+/* The signature element: the active sentence glows brand red. */
+.text-layer span.tl-active {
+  background: var(--highlight);
+  box-shadow: 0 0 0 2px var(--highlight);
+}
+
+/* ---------- Sticky control bar ---------- */
+
+.control-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--eos-black);
+  border-top: 4px solid var(--eos-red);
+  z-index: 50;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.control-bar-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 12px 16px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "transport reading settings";
+  gap: 10px 20px;
+  align-items: center;
+}
+
+.transport {
+  grid-area: transport;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-round {
+  width: 52px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--eos-white);
+  color: var(--eos-black);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-round:hover { background: #E8E8E8; }
+
+.btn-primary-round {
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
+  background: var(--eos-red);
+  color: var(--eos-white);
+}
+.btn-primary-round:hover { background: var(--eos-red-dark); }
+
+.now-reading {
+  grid-area: reading;
+  margin: 0;
+  color: var(--eos-white);
+  font-size: 0.9rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 1.2em;
+}
+
+.settings {
+  grid-area: settings;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--eos-white);
+  font-size: 0.8rem;
+}
+
+.setting-label { font-weight: 600; }
+
+.setting input[type="range"] {
+  width: 130px;
+  accent-color: var(--eos-red);
+  min-height: 28px;
+}
+
+.setting select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  max-width: 190px;
+  min-height: 40px;
+}
+
+/* ---------- Footer ---------- */
+
+.site-footer {
+  background: var(--eos-black);
+  color: var(--eos-white);
+  text-align: center;
+  padding: 16px;
+  font-size: 0.9rem;
+  margin-bottom: var(--control-bar-height);
+}
+
+body:not(.has-controls) .site-footer { margin-bottom: 0; }
+body:not(.has-controls) .main-area { padding-bottom: 40px; }
+
+/* ---------- Mobile layout ---------- */
+
+@media (max-width: 720px) {
+  .control-bar-inner {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "reading"
+      "transport"
+      "settings";
+    justify-items: center;
+    gap: 8px;
+  }
+  .settings { width: 100%; justify-content: space-between; }
+  .setting select { max-width: 150px; }
+  .now-reading { -webkit-line-clamp: 1; text-align: center; }
+  .doc-bar { position: static; }
+  .app-title { font-size: 1.15rem; }
+  :root { --control-bar-height: 210px; }
+}
+
+/* ---------- Motion & accessibility ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
