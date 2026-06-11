@@ -45,7 +45,7 @@ const els = {
   rateValue: document.getElementById("rateValue"),
   voiceSelect: document.getElementById("voiceSelect"),
   schoolLogo: document.getElementById("schoolLogo"),
-  logoFallback: document.getElementById("logoFallback"),
+  langChip: document.getElementById("langChip"),
 };
 
 /* ---------- Application state ---------- */
@@ -61,23 +61,90 @@ const state = {
   renderScale: 1,        // CSS pixels per PDF unit at current width
   renderedPages: new Set(),
   observer: null,        // IntersectionObserver for lazy page rendering
+  docLang: "en",         // detected document language (BCP-47 prefix, e.g. "es")
+  userPickedVoice: false,// true once the user manually chooses a voice
 };
 
 const MAX_CHUNK_CHARS = 280;   // long sentences are split for smoother speech
 const RENDER_KEEP_RANGE = 4;   // keep this many pages rendered around the view
 
 /* ============================================================
-   Logo fallback: if logo.png is missing, show a monogram badge.
+   Logo: the red EOS badge is always shown; if logo.png is
+   missing, simply hide the broken image next to it.
    ============================================================ */
 
 els.schoolLogo.addEventListener("error", () => {
   els.schoolLogo.hidden = true;
-  els.logoFallback.hidden = false;
 });
 
 /* ============================================================
-   Speech support check
+   Language auto-detection (fully local)
+   ------------------------------------------------------------
+   A small stopword detector: function words are extremely
+   frequent and language-specific, so counting them in a sample
+   of the document reliably identifies the language without any
+   network call or library. Detection sets the speech language
+   and pre-selects a matching voice; the user can always override
+   with the Voice dropdown.
    ============================================================ */
+
+const LANG_PROFILES = {
+  en: { name: "English",
+        words: "the and of to in is that for with was are this have from they his her not".split(" ") },
+  es: { name: "Spanish",
+        words: "el la los las de que y en un una es por con para se no su al lo como más pero sus".split(" ") },
+  fr: { name: "French",
+        words: "le la les des de et est dans que pour une un du au avec ce qui sur pas plus par".split(" ") },
+  pt: { name: "Portuguese",
+        words: "o os as de que e em um uma é para com não do da na no se por mais como".split(" ") },
+  de: { name: "German",
+        words: "der die das und ist nicht mit ein eine zu den von auf für sich dem werden auch als".split(" ") },
+  it: { name: "Italian",
+        words: "il la le di che e è per un una con non del gli sono nel alla più come anche".split(" ") },
+};
+
+/**
+ * Detect the dominant language of a text sample.
+ * Returns a language code from LANG_PROFILES, defaulting to "en"
+ * when no language scores confidently.
+ */
+function detectLanguage(sample) {
+  const tokens = sample
+    .toLowerCase()
+    .replace(/[^\p{L}\s]/gu, " ")   // strip digits/punctuation, keep letters
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (tokens.length < 20) return "en";   // too little text to judge
+
+  // Build a token frequency map once, then score each language.
+  const counts = new Map();
+  for (const t of tokens) counts.set(t, (counts.get(t) || 0) + 1);
+
+  let best = "en";
+  let bestScore = 0;
+  for (const [code, profile] of Object.entries(LANG_PROFILES)) {
+    let hits = 0;
+    for (const word of profile.words) hits += counts.get(word) || 0;
+    const score = hits / tokens.length;
+    if (score > bestScore) { bestScore = score; best = code; }
+  }
+
+  // Require stopwords to make up a meaningful share of the sample;
+  // otherwise (tables, code, mixed text) fall back to English.
+  return bestScore >= 0.04 ? best : "en";
+}
+
+/** Update the language chip and pre-select a matching voice. */
+function applyDetectedLanguage(code) {
+  state.docLang = code;
+  const profile = LANG_PROFILES[code];
+  els.langChip.textContent = `Language: ${profile ? profile.name : code}`;
+  els.langChip.hidden = false;
+  loadVoices();   // re-sort the voice list with this language first
+}
+
+
 
 const speechSupported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 if (!speechSupported) {
@@ -97,12 +164,12 @@ function loadVoices() {
   const previous = els.voiceSelect.value;
   els.voiceSelect.innerHTML = "";
 
-  // English voices first — most readable ordering for school use.
-  const sorted = [...voices].sort((a, b) => {
-    const aEn = a.lang.startsWith("en") ? 0 : 1;
-    const bEn = b.lang.startsWith("en") ? 0 : 1;
-    return aEn - bEn || a.name.localeCompare(b.name);
-  });
+  // Voices matching the document language first, then English, then the rest.
+  const rank = (v) =>
+    v.lang.toLowerCase().startsWith(state.docLang) ? 0 :
+    v.lang.startsWith("en") ? 1 : 2;
+  const sorted = [...voices].sort((a, b) =>
+    rank(a) - rank(b) || a.name.localeCompare(b.name));
 
   for (const voice of sorted) {
     const opt = document.createElement("option");
@@ -110,8 +177,13 @@ function loadVoices() {
     opt.textContent = `${voice.name} (${voice.lang})${voice.default ? " — default" : ""}`;
     els.voiceSelect.appendChild(opt);
   }
-  if (previous && sorted.some(v => v.name === previous)) {
+
+  // Keep the user's manual choice; otherwise pick the best match
+  // for the detected language (the list is already sorted for it).
+  if (state.userPickedVoice && previous && sorted.some(v => v.name === previous)) {
     els.voiceSelect.value = previous;
+  } else if (sorted.length) {
+    els.voiceSelect.value = sorted[0].name;
   }
 }
 
@@ -184,6 +256,9 @@ function resetApp() {
   state.sentences = [];
   state.currentSentence = -1;
   state.renderedPages.clear();
+  state.docLang = "en";
+  state.userPickedVoice = false;
+  els.langChip.hidden = true;
   if (state.observer) state.observer.disconnect();
   els.viewer.innerHTML = "";
   els.readerSection.hidden = true;
@@ -289,6 +364,17 @@ async function extractAllText() {
   }
 
   hideStatus();
+
+  // Detect the document language from a sample of the extracted text,
+  // so a Spanish PDF is read with a Spanish voice automatically.
+  if (state.sentences.length > 0) {
+    const sample = state.sentences
+      .slice(0, 80)
+      .map(s => s.text)
+      .join(" ")
+      .slice(0, 5000);
+    applyDetectedLanguage(detectLanguage(sample));
+  }
 
   // Image-only / scanned PDF check: no usable text anywhere.
   if (state.sentences.length === 0) {
@@ -667,6 +753,7 @@ async function speakSentence(index) {
   speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(sentence.text);
+  utterance.lang = state.docLang;   // correct pronunciation even without an explicit voice
   utterance.rate = Number(els.rateSlider.value) || 1;
   const chosen = state.voices.find(v => v.name === els.voiceSelect.value);
   if (chosen) utterance.voice = chosen;
@@ -741,6 +828,7 @@ els.rateSlider.addEventListener("change", () => {
   if (state.isPlaying) speakSentence(state.currentSentence);
 });
 els.voiceSelect.addEventListener("change", () => {
+  state.userPickedVoice = true;
   if (state.isPlaying) speakSentence(state.currentSentence);
 });
 
